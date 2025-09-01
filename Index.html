@@ -952,6 +952,33 @@ document.getElementById("askBtn").onclick = async () => {
   }
 };
   renderLessonList();
+// ---- Ask button -> call Netlify Function (safe) ----
+document.getElementById('askBtn').onclick = async () => {
+  const q = document.getElementById('askInput').value.trim();
+  const chatBox = document.getElementById('askChat');
+  if (!q) return;
+
+  chatBox.insertAdjacentHTML('beforeend', `<div><b>You:</b> ${q}</div>`);
+
+  try {
+    const r = await fetch('/.netlify/functions/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: q })
+    });
+    if (!r.ok) throw new Error('Function error');
+    const { text } = await r.json();
+    chatBox.insertAdjacentHTML(
+      'beforeend',
+      `<div><b>AI:</b> ${text || '(No response)'}</div>`
+    );
+  } catch (e) {
+    chatBox.insertAdjacentHTML(
+      'beforeend',
+      `<div><b>AI:</b> (Error talking to server)</div>`
+    );
+  }
+};
 </script>
 </body>
 </html>
