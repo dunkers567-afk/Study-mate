@@ -915,7 +915,43 @@ function renderCheckpoint(L){
 })();
 
 /* Re-render list on load */
-renderLessonList();
+// ---- OpenAI Ask Button ----
+document.getElementById("askBtn").onclick = async () => {
+  const input = document.getElementById("askInput").value;
+  const chatBox = document.getElementById("askChat");
+
+  if (!input) return;
+
+  // Show user message
+  const userDiv = document.createElement("div");
+  userDiv.textContent = "You: " + input;
+  chatBox.appendChild(userDiv);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + (process.env.OPENAI_API_KEY || "YOUR_API_KEY_HERE")
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: input }]
+      })
+    });
+
+    const data = await response.json();
+    const aiDiv = document.createElement("div");
+    aiDiv.textContent = "AI: " + (data.choices?.[0]?.message?.content || "No response");
+    chatBox.appendChild(aiDiv);
+
+  } catch (err) {
+    const errorDiv = document.createElement("div");
+    errorDiv.textContent = "Error: " + err.message;
+    chatBox.appendChild(errorDiv);
+  }
+};
+  renderLessonList();
 </script>
 </body>
 </html>
