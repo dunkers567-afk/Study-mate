@@ -1,0 +1,921 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>StudyMate — Student AI</title>
+<style>
+  :root{
+    --bg:#0b1018; --panel:#111a2a; --ink:#cfe9ff; --muted:#9fb6d9;
+    --brand:#5df3ff; --ok:#50f790; --warn:#ffc857; --bad:#ff6b88;
+  }
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 system-ui,-apple-system,Segoe UI,Roboto}
+  #app{max-width:980px;margin:0 auto;padding:12px 12px 80px}
+  header{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
+  h1{margin:0;font-size:20px;text-shadow:0 0 12px #5df3ff55}
+  #tabs{position:sticky;top:0;z-index:5;background:linear-gradient(#0b1018,#0b1018cc);backdrop-filter:blur(6px);padding:6px 0 10px}
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .tab{border:1px solid #1f2d47;background:#0f1828;border-radius:10px;padding:10px 12px;text-align:center}
+  .tab.active{outline:2px solid var(--brand);box-shadow:0 0 0 2px #5df3ff22 inset}
+  .panel{border:1px solid #1f2d47;background:var(--panel);border-radius:12px;padding:12px;margin:10px 0}
+  textarea,input[type="text"],input[type="date"]{width:100%;box-sizing:border-box;background:#0e1728;border:1px solid #22324f;border-radius:10px;color:var(--ink);padding:10px 12px}
+  button{background:#122033;border:1px solid #224063;color:var(--ink);border-radius:10px;padding:10px 12px}
+  button.brand{background:#0f2635;border-color:#33a6c7;box-shadow:0 0 12px #5df3ff33}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .pill{display:inline-block;border:1px solid #22324f;background:#0d1626;border-radius:999px;padding:6px 10px;color:var(--muted);margin:2px 4px 0 0}
+  .muted{color:var(--muted)}
+  .good{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  .list{display:grid;gap:8px}
+  .q{border:1px solid #22324f;background:#0d1728;border-radius:10px;padding:10px}
+  .q h4{margin:0 0 8px;font-size:15px}
+  .choice{display:block;margin:6px 0;padding:8px 10px;border-radius:8px;border:1px solid #1f2d47;background:#0a1323}
+  .choice input{margin-right:8px}
+  .choice.correct{outline:2px solid var(--ok)} .choice.wrong{outline:2px solid var(--bad)}
+  .score{font-weight:700}
+  .flex{display:flex;gap:10px;align-items:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:720px){ .grid2{grid-template-columns:1fr} }
+  .tiny{font-size:12px}
+  .tag{background:#0d1626;border:1px solid #22324f;border-radius:8px;padding:4px 8px;margin-right:6px}
+  .center{text-align:center}
+  .spacer{height:8px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>StudyMate <span class="muted">— Student AI</span></h1>
+    <div class="tiny muted">Prototype (offline)</div>
+  </header>
+
+  <section id="tabs">
+    <div class="tabs">
+      <button class="tab active" data-tab="ask">Ask</button>
+      <button class="tab" data-tab="test">Test</button>
+      <button class="tab" data-tab="play">Play</button>
+      <button class="tab" data-tab="sat">SAT Coach</button>
+    </div>
+  </section>
+
+  <!-- ASK -->
+  <section id="ask" class="panel">
+    <h3>Ask anything</h3>
+    <div class="tiny muted">Attach pictures/PDFs if you want; in this offline demo we show them and keep your chat. (Real AI can be wired later.)</div>
+    <div class="spacer"></div>
+    <div class="row">
+      <input id="askInput" type="text" placeholder="e.g., Explain photosynthesis in simple steps"/>
+      <button class="brand" id="askBtn">Ask</button>
+    </div>
+    <div class="row">
+      <input id="fileInput" type="file" multiple />
+      <span class="tiny muted">Supported in demo: images/PDFs (we list them).</span>
+    </div>
+    <div class="spacer"></div>
+    <div id="askChat" class="list"></div>
+  </section>
+
+  <!-- TEST -->
+  <section id="test" class="panel" hidden>
+    <h3>Generate a quiz from pages/text</h3>
+    <div class="grid2">
+      <div>
+        <textarea id="sourceText" rows="8" placeholder="Paste book pages or notes here…"></textarea>
+        <div class="row">
+          <label class="tiny muted"><input type="checkbox" id="tfMix" checked/> include True/False</label>
+          <label class="tiny muted"><input type="checkbox" id="mcMix" checked/> include Multiple Choice</label>
+        </div>
+        <div class="row">
+          <input type="text" id="topicHint" placeholder="Topic (optional, e.g., 'cell biology')">
+          <select id="qCount">
+            <option>10</option><option selected>12</option><option>15</option>
+          </select>
+          <button class="brand" id="genQuiz">Generate quiz</button>
+        </div>
+      </div>
+      <div>
+        <div class="tiny muted">or add a page image (demo doesn’t OCR yet):</div>
+        <input type="file" id="imgPage" accept="image/*,application/pdf" />
+        <div id="imgList" class="tiny muted"></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div id="quizArea"></div>
+  </section>
+
+  <!-- PLAY -->
+  <section id="play" class="panel" hidden>
+    <h3>Play — quick practice</h3>
+    <div class="tiny muted">Pick a category or paste your own Q&A.</div>
+    <div class="row">
+      <button class="tag" data-cat="lang">Language (Spanish basics)</button>
+      <button class="tag" data-cat="fruits">Fruits</button>
+      <button class="tag" data-cat="countries">Countries & Capitals</button>
+      <button class="tag" data-cat="world">World facts</button>
+      <button class="tag" data-cat="sign">Sign language (A–Z)</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="grid2">
+      <div id="playArea" class="list"></div>
+      <div>
+        <h4>Your own mini-quiz</h4>
+        <textarea id="customQA" rows="8" placeholder="Write Q&A, one per line. Example:
+What is 2+2? => 4
+Capital of Japan? => Tokyo
+RGB stands for? => Red Green Blue"></textarea>
+        <button id="loadCustom">Play my questions</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAT (Lessons + Plan) -->
+<section id="sat" class="panel" hidden>
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row">
+      <button class="subtab active" data-sat="lessons">Lessons</button>
+      <button class="subtab" data-sat="plan">Plan</button>
+    </div>
+    <div class="tiny muted">Your progress saves on this device</div>
+  </div>
+
+  <!-- LESSONS LIST / VIEW -->
+  <div id="satLessons">
+    <div id="lessonList" class="list"></div>
+    <div id="lessonView" class="panel" hidden>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h3 id="lvTitle" style="margin:0"></h3>
+        <div>
+          <span class="pill" id="lvSection"></span>
+          <span class="pill" id="lvStatus"></span>
+        </div>
+      </div>
+
+      <!-- step nav -->
+      <div class="row" style="margin:8px 0">
+        <button class="stepbtn active" data-step="teach">1) Learn</button>
+        <button class="stepbtn" data-step="practice">2) Practice</button>
+        <button class="stepbtn" data-step="checkpoint">3) Test</button>
+      </div>
+
+      <!-- step: teach -->
+      <div id="lvTeach" class="list"></div>
+
+      <!-- step: practice -->
+      <div id="lvPractice" class="list" hidden></div>
+
+      <!-- step: checkpoint -->
+      <div id="lvCheckpoint" hidden>
+        <div id="cpWrap" class="list"></div>
+        <div class="panel" id="cpFooter" style="margin-top:10px"></div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="lvBack">Back to lessons</button>
+        <button id="lvNext" class="brand" hidden>Next lesson →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAN (keeps your old planner, simplified) -->
+  <div id="satPlan" hidden>
+    <h3>SAT Study Plan</h3>
+    <div class="grid2">
+      <div>
+        <label class="tiny muted">Exam date</label>
+        <input type="date" id="planDate"/>
+        <label class="tiny muted">Weekday hours</label>
+        <input type="text" id="planHWeek" value="1.0"/>
+        <label class="tiny muted">Weekend hours</label>
+        <input type="text" id="planHWend" value="2.0"/>
+        <div class="spacer"></div>
+        <button class="brand" id="planBuild">Build plan</button>
+      </div>
+      <div>
+        <div class="tiny muted">Focus areas</div>
+        <div class="row" id="planAreas"></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div id="planOut" class="list"></div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ------------ Tabs ------------ */
+const tabs = document.querySelectorAll('.tab');
+tabs.forEach(t=>t.onclick=()=>{ 
+  tabs.forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  ['ask','test','play','sat'].forEach(id=>{
+    document.getElementById(id).hidden = (id!==t.dataset.tab);
+  });
+});
+
+/* ------------ ASK (demo chat) ------------ */
+const askInput = document.getElementById('askInput');
+const askBtn = document.getElementById('askBtn');
+const askChat = document.getElementById('askChat');
+const fileInput = document.getElementById('fileInput');
+let chat = JSON.parse(localStorage.studymate_chat||'[]');
+renderChat();
+
+askBtn.onclick = ()=> {
+  const q = askInput.value.trim();
+  if(!q) return;
+  const files = [...(fileInput.files||[])].map(f=>({name:f.name,size:f.size}));
+  chat.push({role:'user', text:q, files});
+  // simple local "AI" reply: summarize + study prompts
+  const reply = localExplain(q);
+  chat.push({role:'assistant', text:reply});
+  askInput.value=''; fileInput.value='';
+  saveChat(); renderChat();
+};
+
+function localExplain(q){
+  const tips = [
+    "Explain it in 3 steps.",
+    "Give me a real-life example.",
+    "What are common mistakes?",
+    "Turn this into flashcards."
+  ];
+  const pick = tips[Math.floor(Math.random()*tips.length)];
+  const bullets = q.split(/[.?!]/).filter(Boolean).slice(0,3).map(s=>"• "+s.trim());
+  return `Okay! Here's a quick breakdown:\n${bullets.join('\n')}\n\nTry next: “${pick}”`;
+}
+
+function saveChat(){ localStorage.studymate_chat = JSON.stringify(chat.slice(-20)); }
+function renderChat(){
+  askChat.innerHTML='';
+  chat.forEach(m=>{
+    const div = document.createElement('div');
+    div.className='q';
+    div.innerHTML = `<div class="tiny muted">${m.role==='user'?'You':'AI'}</div>
+      <div>${escapeHTML(m.text).replace(/\n/g,'<br>')}</div>
+      ${m.files?m.files.map(f=>`<span class="pill">${f.name} (${Math.round(f.size/1024)} KB)</span>`).join(''):''}`;
+    askChat.appendChild(div);
+  });
+}
+function escapeHTML(s){ return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+/* ------------ TEST (quiz from text) ------------ */
+const qCount = document.getElementById('qCount');
+const genQuiz = document.getElementById('genQuiz');
+const quizArea = document.getElementById('quizArea');
+const sourceText = document.getElementById('sourceText');
+const tfMix = document.getElementById('tfMix'), mcMix = document.getElementById('mcMix');
+const imgPage = document.getElementById('imgPage'), imgList = document.getElementById('imgList');
+imgPage.onchange = ()=>{ imgList.textContent = [...imgPage.files].map(f=>f.name).join(', '); };
+
+genQuiz.onclick = ()=>{
+  const text = sourceText.value.trim();
+  if(!text){ alert('Paste some text first 🙂'); return; }
+  const n = +qCount.value;
+  const qs = buildQuiz(text, n, {tf:tfMix.checked, mc:mcMix.checked, topic:document.getElementById('topicHint').value.trim()});
+  renderQuiz(qs);
+};
+
+function buildQuiz(text, n, opts){
+  // very simple extraction: split sentences, pick keywords, then build TF/MC
+  const sentences = text.replace(/\s+/g,' ').split(/(?<=[.!?])\s/).filter(s=>s.length>20);
+  const words = text.toLowerCase().match(/[a-zA-Z][a-zA-Z\-]{2,}/g)||[];
+  const stop = new Set('the and for are was were from with this that have has into over under between among which whose their there here about into while where when after before because during more most other some such very often usually several first second third able'.split(' '));
+  const freq = {};
+  for(const w of words){ if(!stop.has(w)) freq[w]=(freq[w]||0)+1; }
+  const keys = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,60).map(x=>x[0]);
+
+  const qs=[];
+  while(qs.length<n){
+    const type = (opts.tf && opts.mc) ? (Math.random()<0.4?'tf':'mc') : (opts.tf?'tf':'mc');
+    if(type==='tf' && sentences.length){
+      const s = sentences[Math.floor(Math.random()*sentences.length)];
+      const truth = Math.random()<0.6;
+      const tweak = truth ? s : s.replace(/\b(is|are|was|were|in|on|increases|decreases)\b/,(m)=>({is:'is not',are:'are not',was:'was not',were:'were not',in:'not in',on:'not on',increases:'decreases',decreases:'increases'}[m]||m));
+      qs.push({type:'tf', stem:tweak, correct:truth, explain: truth?'Statement matches the text':'We flipped a key word → check the source.'});
+    } else if(type==='mc' && keys.length>=4){
+      const key = keys[Math.floor(Math.random()*Math.min(keys.length,40))];
+      const correct = key;
+      const distractors = shuffle(keys.filter(k=>k!==key)).slice(0,3);
+      const stem = `Which term best fits this topic${opts.topic?` (${opts.topic})`:''}?`;
+      qs.push({type:'mc', stem, options:shuffle([correct,...distractors]), answer:correct,
+               explain:`Correct: “${correct}”. Chosen from frequent keywords in your text.`});
+    } else {
+      // fallback: short true/false from frequent word
+      const w = keys[Math.floor(Math.random()*keys.length)]||'topic';
+      qs.push({type:'tf', stem:`${capitalize(w)} appears in your notes.`, correct:true, explain:`“${w}” appears in the text.`});
+    }
+  }
+  return qs.slice(0,n);
+}
+
+function renderQuiz(qs){
+  let score=0, answered=0;
+  quizArea.innerHTML='';
+  const list = document.createElement('div'); list.className='list'; quizArea.appendChild(list);
+
+  qs.forEach((q,i)=>{
+    const card = document.createElement('div'); card.className='q';
+    const title = document.createElement('h4'); title.textContent = `Q${i+1}. ${q.stem}`;
+    card.appendChild(title);
+
+    if(q.type==='tf'){
+      ['True','False'].forEach(val=>{
+        const lab=document.createElement('label'); lab.className='choice';
+        lab.innerHTML=`<input type="radio" name="q${i}" value="${val==='True'}"/> ${val}`;
+        lab.querySelector('input').onchange=()=>{
+          if(lab.done) return;
+          const correct = (val==='True')===q.correct;
+          lab.classList.add(correct?'correct':'wrong');
+          score += correct?1:0; answered++;
+          showExplain(card, correct, q.explain);
+          maybeFinish();
+          lab.done=true;
+        };
+        card.appendChild(lab);
+      });
+    } else {
+      q.options.forEach(opt=>{
+        const lab=document.createElement('label'); lab.className='choice';
+        lab.innerHTML=`<input type="radio" name="q${i}" value="${escapeHTML(opt)}"/> ${escapeHTML(opt)}`;
+        lab.querySelector('input').onchange=()=>{
+          if(lab.done) return;
+          const correct = (opt===q.answer);
+          lab.classList.add(correct?'correct':'wrong');
+          score += correct?1:0; answered++;
+          showExplain(card, correct, q.explain);
+          maybeFinish();
+          lab.done=true;
+        };
+        card.appendChild(lab);
+      });
+    }
+    list.appendChild(card);
+  });
+
+  const footer = document.createElement('div');
+  footer.className='panel';
+  footer.innerHTML = `<div class="score">Score: <span id="scNow">0</span> / ${qs.length}</div>
+  <div class="tiny muted">Explanations appear under each question after you answer.</div>`;
+  quizArea.appendChild(footer);
+
+  function showExplain(card, ok, explain){
+    const p=document.createElement('div');
+    p.className='tiny ' + (ok?'good':'bad');
+    p.textContent = (ok?'Correct: ':'Incorrect: ')+explain;
+    card.appendChild(p);
+    document.getElementById('scNow').textContent = score;
+  }
+  function maybeFinish(){
+    if(answered===qs.length){
+      const pct = Math.round(100*score/qs.length);
+      const msg = document.createElement('div');
+      msg.className='center tiny';
+      msg.innerHTML = `<div class="spacer"></div><b>Finished!</b> You scored ${pct}%. ${pct<60?'Review your notes and try again.':'Nice work! Try a harder set.'}`;
+      quizArea.appendChild(msg);
+    }
+  }
+}
+
+/* ------------ PLAY (categories) ------------ */
+const playArea = document.getElementById('playArea');
+document.querySelectorAll('#play .tag').forEach(b=>b.onclick=()=>loadCategory(b.dataset.cat));
+document.getElementById('loadCustom').onclick=()=>{
+  const raw = document.getElementById('customQA').value.trim().split(/\n+/).filter(Boolean);
+  if(!raw.length) return;
+  const qa = raw.map(line=>{
+    const [q,a] = line.split('=>').map(s=>s.trim());
+    return {q,a};
+  }).filter(x=>x.q&&x.a);
+  renderFlash(qa);
+};
+
+const BANKS = {
+  lang: [
+    {q:'hola = ?', a:'hello'}, {q:'gracias = ?', a:'thank you'}, {q:'adiós = ?', a:'goodbye'},
+    {q:'por favor = ?', a:'please'}, {q:'perdón = ?', a:'sorry'}, {q:'agua = ?', a:'water'}
+  ],
+  fruits: [
+    {q:'Apple color often?', a:'red'}, {q:'Citrus rich in vitamin C?', a:'orange'},
+    {q:'Yellow long fruit?', a:'banana'}, {q:'Tiny blue antioxidant fruit?', a:'blueberry'}
+  ],
+  countries: [
+    {q:'Capital of France?', a:'paris'}, {q:'Capital of Japan?', a:'tokyo'}, {q:'Capital of Canada?', a:'ottawa'}
+  ],
+  world: [
+    {q:'Largest ocean?', a:'pacific'}, {q:'H2O is commonly called?', a:'water'}, {q:'Our galaxy name?', a:'milky way'}
+  ],
+  sign: Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ').map(ch=>({q:`ASL: handshape for letter ${ch}? (visual in real app)`, a:ch.toLowerCase()}))
+};
+function loadCategory(k){ renderFlash(BANKS[k]||[]); }
+
+/* Simple flashcard: type the answer (not case-sensitive) */
+function renderFlash(qa){
+  playArea.innerHTML='';
+  if(!qa.length){ playArea.innerHTML='<div class="tiny muted">No questions yet.</div>'; return; }
+  qa.forEach((item,i)=>{
+    const card=document.createElement('div'); card.className='q';
+    card.innerHTML=`<h4>${i+1}. ${escapeHTML(item.q)}</h4>
+      <div class="row">
+        <input type="text" placeholder="Type answer…"/>
+        <button>Check</button>
+      </div>
+      <div class="tiny muted"></div>`;
+    const input = card.querySelector('input'), btn=card.querySelector('button'), hint=card.querySelector('.tiny.muted');
+    btn.onclick=()=>{
+      const ok = input.value.trim().toLowerCase()===item.a.toLowerCase();
+      hint.textContent = ok ? 'Correct!' : `Answer: ${item.a}`;
+      hint.className = 'tiny ' + (ok?'good':'bad');
+    };
+    playArea.appendChild(card);
+  });
+}
+
+/* ------------ SAT COACH ------------ */
+const AREAS = ['Reading','Writing','Math — Algebra','Math — Advanced','Data Analysis','Practice Tests'];
+const satAreas = document.getElementById('satAreas');
+AREAS.forEach(a=>{
+  const id='area'+a.replace(/\W/g,'');
+  const label=document.createElement('label'); label.className='tag';
+  label.innerHTML=`<input type="checkbox" id="${id}" checked> ${a}`;
+  satAreas.appendChild(label);
+});
+document.getElementById('buildPlan').onclick = ()=>{
+  const date = document.getElementById('satDate').value;
+  if(!date){ alert('Pick your SAT date.'); return; }
+  const weekday = Math.max(0, +document.getElementById('satWeekday').value||0);
+  const weekend = Math.max(0, +document.getElementById('satWeekend').value||0);
+  const chosen = AREAS.filter(a=>document.getElementById('area'+a.replace(/\W/g,'')).checked);
+  const plan = makePlan(new Date(), new Date(date), weekday, weekend, chosen);
+  renderPlan(plan);
+};
+
+function makePlan(start, end, hWeek, hWend, areas){
+  const days = [];
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+    const copy = new Date(d);
+    const weekend = copy.getDay()===0 || copy.getDay()===6;
+    const hours = weekend? hWend : hWeek;
+    if(hours>0){
+      const slot = areas[(days.length)%areas.length];
+      days.push({date:new Date(copy), hours, focus: slot});
+    }
+  }
+  // Add weekly practice test every 7th scheduled day
+  for(let i=6;i<days.length;i+=7){ days[i].focus='Practice Tests'; }
+  return days;
+}
+function renderPlan(days){
+  const out = document.getElementById('planOut'); out.innerHTML='';
+  if(!days.length){ out.textContent='No study days scheduled.'; return; }
+  days.forEach(d=>{
+    const li=document.createElement('div'); li.className='q';
+    const dt=d.date.toLocaleDateString();
+    li.innerHTML=`<b>${dt}</b> — ${d.hours}h • <span class="pill">${d.focus}</span>
+      <div class="tiny muted">Task ideas: ${taskIdeas(d.focus)}</div>`;
+    out.appendChild(li);
+  });
+}
+function taskIdeas(area){
+  switch(area){
+    case 'Reading': return '1 passage timed + annotate main idea & evidence.';
+    case 'Writing': return 'Grammar set (10 Q) + error logs.';
+    case 'Math — Algebra': return 'Linear equations, systems, practice set (10).';
+    case 'Math — Advanced': return 'Quadratics, functions, practice set (10).';
+    case 'Data Analysis': return 'Charts/tables practice + %/ratio review.';
+    case 'Practice Tests': return '1 section timed (or full test on weekend).';
+    default: return 'Core review + spaced flashcards.';
+  }
+}
+
+/* ------------ Utils ------------ */
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+/* ==================== SAT LESSONS MODULE ==================== */
+/* Subtab switching (Lessons / Plan) */
+(() => {
+  const subtabs = document.querySelectorAll('#sat .subtab');
+  const satLessons = document.getElementById('satLessons');
+  const satPlan = document.getElementById('satPlan');
+  subtabs.forEach(b => b.onclick = () => {
+    subtabs.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const which = b.dataset.sat;
+    satLessons.hidden = which!=='lessons';
+    satPlan.hidden = which!=='plan';
+  });
+})();
+
+/* --------- Lesson bank (clear explanations + examples) ---------
+   You can add more lessons by pushing to LESSONS. Each has:
+   { id, section, title, objectives[], teach[], practice[], checkpoint[] }
+*/
+const LESSONS = [
+  {
+    id:'R1',
+    section:'Reading',
+    title:'Main Idea & Evidence',
+    objectives:[
+      'Find the central claim/theme of a passage.',
+      'Identify lines that directly support that claim.'
+    ],
+    teach:[
+      'Skim first: read opening + closing sentences of paragraphs to predict the topic.',
+      'Main Idea test: If you removed one paragraph, what idea would you lose? That idea is central.',
+      'Evidence choices must (a) directly address the question and (b) be paraphrasable as support—not merely related.'
+    ],
+    practice:[
+      {
+        stem:'Short passage: "Many city gardens increase biodiversity by offering habitats for pollinators." Main idea?',
+        options:['Gardens are expensive to maintain.','City gardens raise biodiversity.','Pollinators harm cities.','Fewer habitats exist in rural areas.'],
+        answer:1,
+        explain:'The passage directly states gardens increase biodiversity → main idea = biodiversity increases.'
+      },
+      {
+        stem:'Which sentence is the best evidence that biodiversity increases?',
+        options:[
+          'Some residents dislike bees.',
+          '"Many city gardens increase biodiversity..."',
+          'Cities are growing.',
+          'Gardeners water plants weekly.'
+        ],
+        answer:1,
+        explain:'It repeats the claim explicitly → perfect evidence.'
+      }
+    ],
+    checkpoint:[
+      {
+        stem:'Main ideas are best described as:',
+        options:['Specific details','Minor opinions','Central claims that unify the passage','Random facts'],
+        answer:2,
+        explain:'A main idea is the central claim tying details together.'
+      },
+      {
+        stem:'Evidence answers should',
+        options:['sound related','be opinionated','directly support the claim/question','avoid quoting text'],
+        answer:2,
+        explain:'Correct evidence maps directly to the claim/question.'
+      },
+      {
+        stem:'If two choices are both true, prefer the one that',
+        options:['matches key words from the question','is broadest possible','directly supports the precise claim','is shortest'],
+        answer:2,
+        explain:'Support specificity beats vague truth.'
+      },
+      {
+        stem:'A passage says: "River dams reduce fish migration." Main idea?',
+        options:['Dams help migration','Dams reduce migration','Fish avoid rivers','Rivers are longer now'],
+        answer:1,
+        explain:'The claim is explicitly stated.'
+      },
+      {
+        stem:'Best evidence for previous question is likely',
+        options:['A sentence about river length','A sentence about dam history','The line stating dams reduce migration','A sentence about weather'],
+        answer:2,
+        explain:'The line that states the reduction directly.'
+      }
+    ]
+  },
+  {
+    id:'W1',
+    section:'Writing',
+    title:'Sentence Boundaries (Run-ons & Comma Splices)',
+    objectives:[
+      'Detect run-ons and comma splices.',
+      'Fix with period, semicolon, or conjunction.'
+    ],
+    teach:[
+      'Run-on: two independent clauses stuck together incorrectly.',
+      'Comma splice: two independent clauses joined only by a comma.',
+      'Fixes: (1) Period. (2) Semicolon. (3) Comma + FANBOYS (for, and, nor, but, or, yet, so).'
+    ],
+    practice:[
+      {
+        stem:'Choose the best fix: "The experiment failed, the data were lost."',
+        options:['The experiment failed the data were lost.','The experiment failed; the data were lost.','The experiment failed, and the data were lost','Both B and C'],
+        answer:3,
+        explain:'Semicolon or comma + coordinating conjunction both work.'
+      },
+      {
+        stem:'Which is a comma splice?',
+        options:[
+          'The test ended, and we left.',
+          'The test ended we left.',
+          'The test ended, we left.',
+          'The test ended; we left.'
+        ],
+        answer:2,
+        explain:'Two independent clauses joined only by a comma.'
+      }
+    ],
+    checkpoint:[
+      {
+        stem:'Correct fix for a comma splice:',
+        options:['Add another comma','Add semicolon or period','Add colon','Remove subjects'],
+        answer:1,
+        explain:'Use semicolon or period (or comma + FANBOYS).'
+      },
+      {
+        stem:'Pick the correct sentence.',
+        options:[
+          'She studied, she aced the exam.',
+          'She studied. She aced the exam.',
+          'She studied, therefore she aced.',
+          'She studied however she aced.'
+        ],
+        answer:1,
+        explain:'Two independent clauses need period/semicolon or comma + FANBOYS.'
+      },
+      {
+        stem:'"The cells divided they formed colonies." Best fix?',
+        options:['Comma','Period','Dash only','No change'],
+        answer:1,
+        explain:'Two independent clauses → period (or semicolon / comma+FANBOYS).'
+      },
+      {
+        stem:'"It was late, we went home." is a:',
+        options:['Run-on','Comma splice','Fragment','Parallelism error'],
+        answer:1,
+        explain:'Comma splice = run-on subtype.'
+      },
+      {
+        stem:'Which punctuation joins two independent clauses without conjunction?',
+        options:['Comma','Semicolon','Colon','Ellipsis'],
+        answer:1,
+        explain:'Semicolon joins closely related independent clauses.'
+      }
+    ]
+  },
+  {
+    id:'M1',
+    section:'Math — Algebra',
+    title:'Linear Equations & Slope',
+    objectives:[
+      'Interpret slope/intercept from y = mx + b.',
+      'Find slope from two points; write equation.'
+    ],
+    teach:[
+      'Slope m = (rise/run) = (y2 - y1)/(x2 - x1). Intercept b = y when x=0.',
+      'Given points (x1,y1),(x2,y2): m = (y2-y1)/(x2-x1); then plug into y=mx+b with a point to find b.'
+    ],
+    practice:[
+      {
+        stem:'Find slope between (2,5) and (6,9).',
+        options:['m=1','m=2','m=4/3','m=1/2'],
+        answer:0,
+        explain:'(9-5)/(6-2)=4/4=1.'
+      },
+      {
+        stem:'Line with m=2 through (1,3): equation?',
+        options:['y=2x+1','y=2x+3','y=2x+5','y=2x-1'],
+        answer:3,
+        explain:'3 = 2(1)+b → b=1 ⇒ y=2x+1.'
+      }
+    ],
+    checkpoint:[
+      {
+        stem:'Slope from (−1,2) to (3,10):',
+        options:['2','3','4/1','8/4'],
+        answer:0,
+        explain:'(10−2)/(3−(−1))=8/4=2.'
+      },
+      {
+        stem:'If y=−3x+7, intercept is',
+        options:['−3','7','(−3,7)','(0,7)'],
+        answer:3,
+        explain:'b=7 so y-intercept at (0,7).'
+      },
+      {
+        stem:'Point (2,5) with slope 1/2 → equation:',
+        options:['y=0.5x+4','y=0.5x+3','y=2x+1','y=x−1'],
+        answer:1,
+        explain:'5=0.5·2 + b → 5=1 + b → b=4 ⇒ y=0.5x+4 (check choices: that’s A).'
+      },
+      {
+        stem:'Parallel lines have',
+        options:['same intercept','same slope','slope product −1','no slope'],
+        answer:1,
+        explain:'Parallels share equal slope.'
+      },
+      {
+        stem:'Given m=−2 and b=5, pick the graph feature:',
+        options:['Rises right','Falls right','Passes (0,−2)','Undefined slope'],
+        answer:1,
+        explain:'Negative slope falls as x increases; intercept y=5 at x=0.'
+      }
+    ]
+  }
+];
+
+/* --------- Render lessons list --------- */
+const lessonList = document.getElementById('lessonList');
+const lessonView = document.getElementById('lessonView');
+const lvTitle = document.getElementById('lvTitle');
+const lvSection = document.getElementById('lvSection');
+const lvStatus = document.getElementById('lvStatus');
+const lvTeach = document.getElementById('lvTeach');
+const lvPractice = document.getElementById('lvPractice');
+const lvCheckpoint = document.getElementById('lvCheckpoint');
+const cpWrap = document.getElementById('cpWrap');
+const cpFooter = document.getElementById('cpFooter');
+const lvBack = document.getElementById('lvBack');
+const lvNext = document.getElementById('lvNext');
+
+const PROG = JSON.parse(localStorage.sat_progress||'{}');
+
+function saveProg(){ localStorage.sat_progress = JSON.stringify(PROG); }
+
+function renderLessonList(){
+  lessonView.hidden = true;
+  lessonList.innerHTML = '';
+  // group by section
+  const bySec = {};
+  LESSONS.forEach(L => (bySec[L.section] = bySec[L.section] || []).push(L));
+  Object.keys(bySec).forEach(sec=>{
+    const head = document.createElement('h4');
+    head.textContent = sec;
+    lessonList.appendChild(head);
+    bySec[sec].forEach(L=>{
+      const row = document.createElement('div');
+      row.className='q';
+      const prog = PROG[L.id]||{};
+      row.innerHTML = `
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <div>
+            <b>${L.title}</b>
+            <div class="tiny muted">${L.objectives.join(' • ')}</div>
+          </div>
+          <div>
+            <span class="pill">${prog.done?'Completed ✅':'Not started'}</span>
+            <button class="brand" data-open="${L.id}">${prog.done?'Review':'Start'}</button>
+          </div>
+        </div>`;
+      row.querySelector('button').onclick = ()=> openLesson(L.id);
+      lessonList.appendChild(row);
+    });
+  });
+}
+
+function openLesson(id){
+  const L = LESSONS.find(x=>x.id===id);
+  if(!L) return;
+  lessonList.innerHTML = '';
+  lessonView.hidden = false;
+
+  lvTitle.textContent = L.title;
+  lvSection.textContent = L.section;
+  lvStatus.textContent = PROG[id]?.done ? 'Completed ✅' : 'In progress';
+
+  // steps state
+  setStep('teach');
+  // TEACH
+  lvTeach.innerHTML = '';
+  const goals = document.createElement('div');
+  goals.className='q';
+  goals.innerHTML = `<b>Objectives</b><div class="tiny muted">${L.objectives.join(' • ')}</div>`;
+  lvTeach.appendChild(goals);
+  L.teach.forEach(t=>{
+    const p = document.createElement('div');
+    p.className='q';
+    p.textContent = t;
+    lvTeach.appendChild(p);
+  });
+
+  // PRACTICE
+  lvPractice.innerHTML='';
+  L.practice.forEach((it,i)=>{
+    const card = document.createElement('div'); card.className='q';
+    card.innerHTML = `<h4>${i+1}. ${it.stem}</h4>`;
+    it.options.forEach((opt,idx)=>{
+      const lab = document.createElement('label'); lab.className='choice';
+      lab.innerHTML = `<input type="radio" name="p${L.id}${i}" /> ${opt}`;
+      lab.querySelector('input').onchange = ()=>{
+        const ok = idx===it.answer;
+        lab.classList.add(ok?'correct':'wrong');
+        const exp = document.createElement('div');
+        exp.className = 'tiny ' + (ok?'good':'bad');
+        exp.textContent = (ok?'Correct: ':'Incorrect: ') + it.explain;
+        card.appendChild(exp);
+      };
+      card.appendChild(lab);
+    });
+    lvPractice.appendChild(card);
+  });
+
+  // CHECKPOINT
+  renderCheckpoint(L);
+
+  // buttons
+  lvBack.onclick = renderLessonList;
+  lvNext.onclick = ()=>{
+    const i = LESSONS.findIndex(x=>x.id===id);
+    const next = LESSONS[i+1];
+    if(next) openLesson(next.id); else renderLessonList();
+  };
+
+  // step buttons
+  document.querySelectorAll('.stepbtn').forEach(b=>{
+    b.onclick = ()=> setStep(b.dataset.step);
+  });
+
+  function setStep(step){
+    document.querySelectorAll('.stepbtn').forEach(b=>b.classList.toggle('active', b.dataset.step===step));
+    lvTeach.hidden = step!=='teach';
+    lvPractice.hidden = step!=='practice';
+    lvCheckpoint.hidden = step!=='checkpoint';
+  }
+}
+
+function renderCheckpoint(L){
+  cpWrap.innerHTML=''; cpFooter.innerHTML='';
+  let score=0, answered=0; const total=L.checkpoint.length;
+
+  L.checkpoint.forEach((q,i)=>{
+    const card = document.createElement('div'); card.className='q';
+    card.innerHTML = `<h4>${i+1}. ${q.stem}</h4>`;
+    q.options.forEach((opt,idx)=>{
+      const lab = document.createElement('label'); lab.className='choice';
+      lab.innerHTML = `<input type="radio" name="c${L.id}${i}"/> ${opt}`;
+      lab.querySelector('input').onchange = ()=>{
+        if(lab.done) return;
+        const ok = idx===q.answer;
+        lab.classList.add(ok?'correct':'wrong');
+        score += ok?1:0; answered++;
+        const exp = document.createElement('div');
+        exp.className = 'tiny ' + (ok?'good':'bad');
+        exp.textContent = (ok?'Correct: ':'Incorrect: ') + q.explain;
+        card.appendChild(exp);
+        updateFooter();
+        lab.done = true;
+      };
+      card.appendChild(lab);
+    });
+    cpWrap.appendChild(card);
+  });
+
+  function updateFooter(){
+    const pct = Math.round(100*score/total);
+    cpFooter.innerHTML = `<div><b>Checkpoint score:</b> ${score}/${total} (${pct}%)</div>
+      <div class="tiny muted">${pct>=70?'Passed ✅ — lesson marked complete.':'Score 70%+ to complete the lesson.'}</div>`;
+    if(answered===total){
+      const passed = pct>=70;
+      // save progress
+      const id = LESSONS.find(x=>x.title===lvTitle.textContent).id;
+      PROG[id] = { done: passed, best: Math.max(PROG[id]?.best||0, pct) };
+      saveProg();
+      document.getElementById('lvStatus').textContent = passed?'Completed ✅':'In progress';
+      document.getElementById('lvNext').hidden = !passed;
+    }
+  }
+}
+
+/* --------- Simple Plan (keeps your earlier approach) --------- */
+(() => {
+  const AREAS = ['Reading','Writing','Math — Algebra','Math — Advanced','Data Analysis','Practice Tests'];
+  const planAreas = document.getElementById('planAreas');
+  AREAS.forEach(a=>{
+    const id='pl'+a.replace(/\W/g,'');
+    const lab=document.createElement('label'); lab.className='tag';
+    lab.innerHTML=`<input type="checkbox" id="${id}" checked> ${a}`;
+    planAreas.appendChild(lab);
+  });
+  document.getElementById('planBuild').onclick = ()=>{
+    const date = document.getElementById('planDate').value;
+    if(!date){ alert('Pick your SAT date'); return; }
+    const hW = Math.max(0,+document.getElementById('planHWeek').value||0);
+    const hE = Math.max(0,+document.getElementById('planHWend').value||0);
+    const selected = AREAS.filter(a=>document.getElementById('pl'+a.replace(/\W/g,'')).checked);
+    const days = buildPlan(new Date(), new Date(date), hW, hE, selected);
+    const out = document.getElementById('planOut'); out.innerHTML='';
+    days.forEach(d=>{
+      const li=document.createElement('div'); li.className='q';
+      li.innerHTML = `<b>${d.date.toLocaleDateString()}</b> — ${d.hours}h • <span class="pill">${d.focus}</span>
+      <div class="tiny muted">${taskFor(d.focus)}</div>`;
+      out.appendChild(li);
+    });
+  };
+  function buildPlan(start,end,hW,hE,areas){
+    const arr=[];
+    for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+      const copy=new Date(d); const weekend=[0,6].includes(copy.getDay());
+      const hrs = weekend?hE:hW; if(hrs<=0) continue;
+      arr.push({date:copy, hours:hrs, focus: areas[arr.length%areas.length]});
+    }
+    for(let i=6;i<arr.length;i+=7) arr[i].focus='Practice Tests';
+    return arr;
+  }
+  function taskFor(area){
+    switch(area){
+      case 'Reading': return '1 passage timed; main idea + evidence review.';
+      case 'Writing': return '10 Q grammar set; error log.';
+      case 'Math — Algebra': return 'Linear eqs, slope, forms; 10 practice Qs.';
+      case 'Math — Advanced': return 'Quadratics/functions; 10 practice Qs.';
+      case 'Data Analysis': return 'Tables/percent; 10 practice Qs.';
+      default: return 'Practice or full test.'
+    }
+  }
+})();
+
+/* Re-render list on load */
+renderLessonList();
+</script>
+</body>
+</html>
